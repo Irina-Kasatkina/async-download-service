@@ -2,9 +2,12 @@
 
 import aiofiles
 import asyncio
+import logging
 import os
 from aiohttp import web
 
+
+logging.basicConfig(level = logging.DEBUG)
 
 CHUNK_SIZE = 1024
 
@@ -31,6 +34,7 @@ async def archive(request):
 
     while not process.stdout.at_eof():
         zip_chunk = await process.stdout.read(CHUNK_SIZE)
+        logging.info('Sending archive chunk ...')
         await response.write(zip_chunk)
     return response
 
