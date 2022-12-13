@@ -36,6 +36,7 @@ async def archive(request):
         zip_chunk = await process.stdout.read(CHUNK_SIZE)
         logging.info('Sending archive chunk ...')
         await response.write(zip_chunk)
+        await asyncio.sleep(1)
     return response
 
 
