@@ -10,26 +10,28 @@ CHUNK_SIZE = 1024
 
 
 async def archive(request):
+    archive_hash = request.match_info.get('archive_hash', '')
+    archive_path = os.path.join(os.getcwd(), 'test_photos', archive_hash)
+    if not archive_hash or not os.path.exists(archive_path):
+        raise web.HTTPNotFound(text='Архив не существует или был удален')
+
     response = web.StreamResponse()
     response.headers['Content-Type'] = 'text/html'
     response.headers['Content-Disposition'] = f'attachment; filename="wedding.zip"'
     await response.prepare(request)
 
-    archive_hash = request.match_info.get('archive_hash', '')
-    if archive_hash:
-        args = ['-qr', '-', '.']
-        archive_path = os.path.join(os.getcwd(), 'test_photos', archive_hash)
-        process: Process = await asyncio.create_subprocess_exec(
-            'zip',
-            *args,
-            cwd=archive_path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
+    args = ['-qr', '-', '.']
+    process: Process = await asyncio.create_subprocess_exec(
+        'zip',
+        *args,
+        cwd=archive_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
 
-        while not process.stdout.at_eof():
-            zip_chunk = await process.stdout.read(CHUNK_SIZE)
-            await response.write(zip_chunk)
+    while not process.stdout.at_eof():
+        zip_chunk = await process.stdout.read(CHUNK_SIZE)
+        await response.write(zip_chunk)
     return response
 
 
