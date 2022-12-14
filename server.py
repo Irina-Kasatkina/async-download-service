@@ -9,7 +9,7 @@ from aiohttp import web
 
 logging.basicConfig(level = logging.DEBUG)
 
-CHUNK_SIZE = 1024
+CHUNK_SIZE = 102400
 
 
 async def archive(request):
@@ -32,12 +32,19 @@ async def archive(request):
         stderr=asyncio.subprocess.PIPE
     )
 
-    while not process.stdout.at_eof():
-        zip_chunk = await process.stdout.read(CHUNK_SIZE)
-        logging.info('Sending archive chunk ...')
-        await response.write(zip_chunk)
-        await asyncio.sleep(1)
-    return response
+    try:
+        while not process.stdout.at_eof():
+            zip_chunk = await process.stdout.read(CHUNK_SIZE)
+            logging.debug('Sending archive chunk ...')
+            await response.write(zip_chunk)
+            await asyncio.sleep(1)
+    except asyncio.CancelledError:
+        logging.debug('Download was interrupted')
+        process.kill()
+        await process.communicate()
+        raise
+    finally:
+        return response
 
 
 
