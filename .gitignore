@@ -160,4 +160,4 @@ cython_debug/
 .idea/
 
 # This project
-heroku-help.txt
+readme.txt
