@@ -15,7 +15,7 @@ CHUNK_SIZE = 102400
 PHOTOS_FOLDER = 'test_photos'
 
 
-def create_parser():
+def read_arguments():
     """Create command line parameter parser."""
 
     parser = argparse.ArgumentParser(description='Асинхронный микросервис для загрузки файлов.')
@@ -27,13 +27,13 @@ def create_parser():
         default=os.path.join(os.getcwd(), PHOTOS_FOLDER),
         help='путь к каталогу с фотографиями'
     )
-    return parser
+    return parser.parse_args()
 
 
 async def archive(request):
     """Archive requested folder and send zip to user."""
 
-    archive_hash = request.match_info.get('archive_hash', '')
+    archive_hash = request.match_info['archive_hash']
     archive_path = os.path.join(request.app.args.path, archive_hash)
     if not archive_hash or not os.path.exists(archive_path):
         raise web.HTTPNotFound(text='Архив не существует или был удален')
@@ -63,11 +63,17 @@ async def archive(request):
     except asyncio.CancelledError:
         if request.app.args.logging:
             logging.debug('Download was interrupted')
-        process.kill()
-        await process.communicate()
         raise
     finally:
-        return response
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+        await process.communicate()
+        if process.returncode == 9 and request.app.args.logging:
+            logging.debug('Interrupted by keyboard')
+        response.force_close()
+    return response
 
 
 async def handle_index_page(request):
@@ -83,7 +89,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
 
     app = web.Application()
-    app.args = create_parser().parse_args()
+    app.args = read_arguments()
     app.add_routes([
         web.get('/', handle_index_page),
         web.get('/archive/{archive_hash}/', archive),
