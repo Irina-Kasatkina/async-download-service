@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import logging
 import os
+from contextlib import suppress
 
 import aiofiles
 from aiohttp import web
@@ -16,7 +17,7 @@ PHOTOS_FOLDER = 'test_photos'
 
 
 def read_arguments():
-    """Create command line parameter parser."""
+    """Read arguments from command line."""
 
     parser = argparse.ArgumentParser(description='Асинхронный микросервис для загрузки файлов.')
     parser.add_argument('-l', '--logging', action='store_true', help='включить логирование')
@@ -35,8 +36,8 @@ async def archive(request):
 
     archive_hash = request.match_info['archive_hash']
     archive_path = os.path.join(request.app.args.path, archive_hash)
-    if not archive_hash or not os.path.exists(archive_path):
-        raise web.HTTPNotFound(text='Архив не существует или был удален')
+    if not os.path.exists(archive_path):
+        raise web.HTTPNotFound(text='Архив не существует или был удален.')
 
     response = web.StreamResponse()
     response.headers['Content-Type'] = 'text/html'
@@ -55,23 +56,20 @@ async def archive(request):
     try:
         while not process.stdout.at_eof():
             zip_chunk = await process.stdout.read(CHUNK_SIZE)
-            if request.app.args.logging:
-                logging.debug('Sending archive chunk ...')
+            logging.debug('Sending archive chunk ...')
             await response.write(zip_chunk)
             if request.app.args.delay:
                 await asyncio.sleep(1)
     except asyncio.CancelledError:
-        if request.app.args.logging:
-            logging.debug('Download was interrupted')
+        logging.debug('Download was interrupted.')
         raise
     finally:
-        try:
+        with suppress(ProcessLookupError):
             process.kill()
-        except ProcessLookupError:
-            pass
-        await process.communicate()
-        if process.returncode == 9 and request.app.args.logging:
-            logging.debug('Interrupted by keyboard')
+            await process.communicate()
+
+        if process.returncode == 9:
+            logging.debug('Interrupted by keyboard.')
         response.force_close()
     return response
 
@@ -86,10 +84,11 @@ async def handle_index_page(request):
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
-
     app = web.Application()
     app.args = read_arguments()
+
+    logging.basicConfig(level=logging.DEBUG if app.args.logging else logging.ERROR)
+
     app.add_routes([
         web.get('/', handle_index_page),
         web.get('/archive/{archive_hash}/', archive),
